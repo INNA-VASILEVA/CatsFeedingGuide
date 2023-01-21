@@ -19,6 +19,10 @@ public class Recipe {
     private static final String DEFAULT_NAME = "<RECIPE_NAME>";
     private static final int DEFAULT_COOKING_TIME = 10;
 
+    public static int counter = 0;
+
+    @JsonProperty("id")
+    private Integer id;
     @JsonProperty("name")
     private String name;
     @JsonProperty("cookingTime")
@@ -32,10 +36,17 @@ public class Recipe {
                   Integer cookingTime,
                   List<Ingredient> ingredients,
                   List<String> steps) {
+        id = ++counter;
         setName(name);
         setCookingTime(cookingTime);
         setIngredients(ingredients);
         setSteps(steps);
+    }
+
+    public void setId(Integer id) {
+        if (isNumberNotNullAndPositive(id)) {
+            this.id = id;
+        }
     }
 
     public void setName(String name) {
@@ -60,5 +71,18 @@ public class Recipe {
 
     public void setSteps(List<String> steps) {
         this.steps = Objects.requireNonNullElseGet(steps, ArrayList::new);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Recipe recipe = (Recipe) o;
+        return Objects.equals(cookingTime, recipe.cookingTime)
+                && Objects.equals(name, recipe.name);
+    }
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, cookingTime);
     }
 }
