@@ -2,7 +2,13 @@ package com.example.catsfeedingguide.services.impl;
 
 import com.example.catsfeedingguide.model.Ingredient;
 import com.example.catsfeedingguide.model.Recipe;
+import com.example.catsfeedingguide.services.FilesService;
 import com.example.catsfeedingguide.services.RecipesService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -11,7 +17,29 @@ import static com.example.catsfeedingguide.CheckData.addNewIngredients;
 
 @Service
 public class RecipesServiceImpl implements RecipesService {
-    private final Map<Integer, Recipe> recipes = new LinkedHashMap<>();
+    private static int counter = 0;
+
+    private static Map<Integer, Recipe> recipes = new LinkedHashMap<>();
+
+    @Value("${name.of.recipes.data.file}")
+    private String recipesDataFileName;
+
+    @Value("${name.of.ingredients.data.file}")
+    private String ingredientsDataFileName;
+
+    private final FilesService filesService;
+
+    public RecipesServiceImpl(FilesService filesService) {
+        this.filesService = filesService;
+    }
+
+    @PostConstruct
+    private void init() {
+        readFromFile();
+        if (!recipes.isEmpty()) {
+            counter = Collections.max(recipes.keySet());
+        }
+    }
 
     @Override
     public int addRecipe(Recipe recipe) {
@@ -20,7 +48,10 @@ public class RecipesServiceImpl implements RecipesService {
                 return rcp.getId();
             }
         }
-        addNewIngredients(recipe);
+        recipe.setId(++counter);
+        addNewIngredients(recipe, counter);
+        recipes.put(recipe.getId(), recipe);
+        saveToFile();
         recipes.put(recipe.getId(), recipe);
         return recipe.getId();
     }
@@ -29,6 +60,7 @@ public class RecipesServiceImpl implements RecipesService {
     public Recipe getRecipe(int number) {
         return recipes.get(number);
     }
+
     @Override
     public List<Recipe> getAllRecipes(long page, long numberOfRecipesOnPage) {
         return recipes.entrySet().stream()
@@ -38,6 +70,7 @@ public class RecipesServiceImpl implements RecipesService {
                 .map(Map.Entry::getValue)
                 .toList();
     }
+
     @Override
     public List<Recipe> searchByIngredientIds(List<Integer> ingredientIds) {
         return recipes.values().stream()
@@ -52,14 +85,44 @@ public class RecipesServiceImpl implements RecipesService {
     @Override
     public Recipe updateRecipe(int number, Recipe recipe) {
         if (!recipes.containsKey(number)) return null;
-        addNewIngredients(recipe);
+        addNewIngredients(recipe, counter);
         recipe.setId(number);
+        Recipe result = recipes.put(number, recipe);
+        saveToFile();
 
-        return recipes.put(number, recipe);
+        return result;
     }
 
     @Override
     public Recipe deleteRecipe(int number) {
-        return recipes.remove(number);
+        Recipe result = recipes.remove(number);
+        if (result != null) {
+            saveToFile();
+        }
+
+        return result;
+    }
+
+    private void saveToFile() {
+        try {
+            String json = new ObjectMapper().writeValueAsString(recipes);
+            filesService.saveToJsonFile(json, recipesDataFileName);
+            json = new ObjectMapper().writeValueAsString(IngredientsServiceImpl.ingredients);
+            filesService.saveToJsonFile(json, ingredientsDataFileName);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void readFromFile() {
+        try {
+            String json = filesService.readFromJsonFile(recipesDataFileName);
+            if (json != null) {
+                recipes = new ObjectMapper().readValue(json, new TypeReference<LinkedHashMap<Integer, Recipe>>() {
+                });
+            }
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
